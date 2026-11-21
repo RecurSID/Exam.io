@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="1414" viewBox="0 0 1000 1414">
+  <rect width="1000" height="1414" fill="#fffefa"/>
+  <rect x="46" y="46" width="908" height="1322" rx="3" fill="none" stroke="#273338" stroke-width="2"/>
+  <g fill="#273338" font-family="Georgia, serif">
+    <text x="500" y="100" text-anchor="middle" font-size="20" letter-spacing="4">EXAMIO DEMONSTRATION</text>
+    <text x="500" y="150" text-anchor="middle" font-size="38" font-weight="bold">General Science Assessment</text>
+    <text x="500" y="188" text-anchor="middle" font-family="Arial, sans-serif" font-size="18">Class 10 · CQ + MCQ · Full marks 50</text>
+  </g>
+  <line x1="90" y1="225" x2="910" y2="225" stroke="#9cb080" stroke-width="4"/>
+  <g fill="#273338" font-family="Arial, sans-serif" font-size="17">
+    <text x="90" y="266" font-weight="bold">Instructions</text>
+    <text x="90" y="298">Answer all questions. Write clearly and show each step where appropriate.</text>
+    <text x="90" y="330">Select only one answer for each multiple-choice question.</text>
+  </g>
+  <rect x="80" y="370" width="840" height="54" rx="8" fill="#2b5748"/>
+  <text x="106" y="405" fill="#fffefa" font-family="Georgia, serif" font-weight="bold" font-size="23">Section A · Creative questions</text>
+  <g fill="#273338" font-family="Arial, sans-serif" font-size="18">
+    <text x="90" y="468" font-weight="bold">1.</text>
+    <text x="124" y="468">A green plant is placed near a sunny window for three days.</text>
+    <text x="124" y="504">a) Name the process used by the plant to make food.</text>
+    <text x="124" y="540">b) Explain the roles of sunlight and chlorophyll in this process.</text>
+    <text x="124" y="576">c) Predict one change if the same plant is moved into darkness.</text>
+    <line x1="124" y1="610" x2="880" y2="610" stroke="#c7cdbf"/>
+    <line x1="124" y1="650" x2="880" y2="650" stroke="#c7cdbf"/>
+    <line x1="124" y1="690" x2="880" y2="690" stroke="#c7cdbf"/>
+    <text x="90" y="750" font-weight="bold">2.</text>
+    <text x="124" y="750">A cyclist travels 1200 metres in 4 minutes at a steady speed.</text>
+    <text x="124" y="786">a) Calculate the speed in metres per second.</text>
+    <text x="124" y="822">b) Describe one force that acts against the cyclist's motion.</text>
+    <line x1="124" y1="856" x2="880" y2="856" stroke="#c7cdbf"/>
+    <line x1="124" y1="896" x2="880" y2="896" stroke="#c7cdbf"/>
+  </g>
+  <rect x="80" y="940" width="840" height="54" rx="8" fill="#618764"/>
+  <text x="106" y="975" fill="#fffefa" font-family="Georgia, serif" font-weight="bold" font-size="23">Section B · Multiple choice</text>
+  <g fill="#273338" font-family="Arial, sans-serif" font-size="18">
+    <text x="90" y="1040" font-weight="bold">3.</text>
+    <text x="124" y="1040">Which organelle controls the activities of a cell?</text>
+    <text x="124" y="1078">A. Cell wall        B. Nucleus        C. Vacuole        D. Cytoplasm</text>
+    <text x="90" y="1138" font-weight="bold">4.</text>
+    <text x="124" y="1138">Which is a chemical change?</text>
+    <text x="124" y="1176">A. Ice melting      B. Paper tearing      C. Iron rusting      D. Water boiling</text>
+    <text x="90" y="1236" font-weight="bold">5.</text>
+    <text x="124" y="1236">The SI unit of force is:</text>
+    <text x="124" y="1274">A. Joule            B. Watt            C. Pascal            D. Newton</text>
+  </g>
+  <text x="500" y="1330" text-anchor="middle" fill="#618764" font-family="Georgia, serif" font-size="18" font-style="italic">End of demonstration paper</text>
+</svg>
