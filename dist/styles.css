@@ -152,7 +152,12 @@ blockquote { margin: 20px 0 30px; font: 500 1.32rem/1.45 var(--serif); letter-sp
 .admin-view { padding: clamp(58px, 8vw, 105px) 4vw 80px; }
 .admin-heading { margin-bottom: 42px; }
 .admin-heading h1 { margin-bottom: 0; }
+.admin-login-card { max-width: 520px; margin: 0 auto; padding: 42px; border: 1px solid var(--line); border-radius: 24px; background: rgba(255,255,255,.58); box-shadow: var(--shadow); }
+.admin-login-card > .brand-mark { margin-bottom: 24px; }
+.admin-login-card > .primary-button { width: 100%; }
 .admin-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; align-items: start; }
+.admin-session-bar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 18px; border: 1px solid var(--line); border-radius: 14px; background: rgba(255,255,255,.5); font-size: .82rem; }
+.admin-session-bar .secondary-button { min-height: 40px; }
 .admin-card { padding: clamp(26px, 4vw, 42px); border: 1px solid var(--line); border-radius: 24px; background: rgba(255,255,255,.55); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
 .field { display: flex; flex-direction: column; gap: 7px; color: var(--ink); font-size: .8rem; font-weight: 800; }

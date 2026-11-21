@@ -1,4 +1,5 @@
 const DEFAULT_PAPER = 'assets/question-paper.svg';
+const api = window.examioApi;
 
 const defaultConfig = {
   title: 'General Science Assessment', subject: 'Science', className: 'Class 10',
@@ -23,7 +24,7 @@ const state = {
   deadline: null, timerId: null,
   config: { ...defaultConfig, ...readStored('examio-config', {}) },
   results: { ...defaultResults, ...readStored('examio-results', {}) },
-  selectedSubject: 'All', pendingPaperUrl: null,
+  selectedSubject: 'All', pendingPaperUrl: null, pendingPaperFile: null, adminSession: null,
 };
 
 const elements = {
@@ -80,11 +81,29 @@ function updateTimer() {
   if (state.remainingSeconds <= 0) endExam();
 }
 
-function startExam(event) {
+async function startExam(event) {
   event.preventDefault();
-  state.totalSeconds = Number(state.config.durationMinutes) * 60;
-  state.remainingSeconds = state.totalSeconds;
-  state.deadline = Date.now() + state.totalSeconds * 1000;
+  const startButton = elements.startForm.querySelector('button[type="submit"]');
+  startButton.disabled = true;
+  startButton.textContent = 'Opening paper…';
+  try {
+    if (state.config.id && api?.isConfigured()) {
+      const session = await api.startExam(state.config.id);
+      state.deadline = new Date(session.expires_at).getTime();
+      state.totalSeconds = Math.max(1, Math.round((state.deadline - new Date(session.started_at).getTime()) / 1000));
+      elements.questionPaper.src = session.paper_url;
+    } else {
+      state.totalSeconds = Number(state.config.durationMinutes) * 60;
+      state.deadline = Date.now() + state.totalSeconds * 1000;
+      elements.questionPaper.src = state.config.paperUrl || DEFAULT_PAPER;
+    }
+  } catch (error) {
+    showToast(`Unable to start: ${error.message}`);
+    startButton.disabled = false;
+    startButton.textContent = 'Start exam';
+    return;
+  }
+  state.remainingSeconds = Math.max(0, Math.ceil((state.deadline - Date.now()) / 1000));
   state.running = true; state.ended = false;
   elements.startPanel.hidden = true; elements.expiredPanel.hidden = true; elements.sessionPanel.hidden = false;
   elements.timer.textContent = formatTime(state.remainingSeconds);
@@ -93,6 +112,8 @@ function startExam(event) {
   state.timerId = window.setInterval(updateTimer, 250);
   updateTimer(); elements.sessionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   showToast('Exam started. Focus protection is active.');
+  startButton.disabled = false;
+  startButton.textContent = 'Start exam';
 }
 
 function endExam() {
@@ -162,16 +183,33 @@ function renderResult(subject) {
   document.querySelector('#breakdown-list').innerHTML = resultRows(subject, data).map(([label, value]) => `<div class="breakdown-row"><span>${label}</span><div class="row-track"><i style="width:${value}%"></i></div><strong>${value}%</strong></div>`).join('');
 }
 
-function saveExamSettings(event) {
+async function saveExamSettings(event) {
   event.preventDefault();
-  state.config = {
+  const button = event.submitter;
+  button.disabled = true;
+  button.textContent = 'Publishing…';
+  try {
+    let paperPath = state.config.paperPath || null;
+    if (state.pendingPaperFile) paperPath = await api.uploadPaper(state.pendingPaperFile);
+    if (!paperPath) throw new Error('Upload a question-paper image before publishing.');
+    const draft = {
+      id: state.config.id, paperPath,
     title: document.querySelector('#admin-exam-title').value.trim(), subject: document.querySelector('#admin-subject').value,
     className: document.querySelector('#admin-class').value.trim(), durationMinutes: Number(document.querySelector('#admin-duration').value),
-    fullMarks: Number(document.querySelector('#admin-marks').value), paperUrl: state.pendingPaperUrl || state.config.paperUrl || DEFAULT_PAPER,
-  };
-  try { localStorage.setItem('examio-config', JSON.stringify(state.config)); }
-  catch { showToast('Image is too large for browser storage; it will last for this session.'); }
-  applyExamConfig(); showToast('Exam settings saved and ready for candidates.');
+      fullMarks: Number(document.querySelector('#admin-marks').value), paperUrl: DEFAULT_PAPER,
+    };
+    const saved = await api.saveExam(draft);
+    state.config = mapExam(saved);
+    state.pendingPaperFile = null;
+    applyExamConfig();
+    elements.paperPreview.src = await api.createPaperPreview(paperPath);
+    showToast('Exam published to Supabase.');
+  } catch (error) {
+    showToast(`Publish failed: ${error.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Save exam settings';
+  }
 }
 
 function loadResultEditor(subject) {
@@ -181,7 +219,7 @@ function loadResultEditor(subject) {
   document.querySelector('#admin-feedback').value = data.feedback || '';
 }
 
-function saveSubjectResult(event) {
+async function saveSubjectResult(event) {
   event.preventDefault();
   const subject = document.querySelector('#result-subject').value;
   const result = {
@@ -190,8 +228,64 @@ function saveSubjectResult(event) {
     feedback: document.querySelector('#admin-feedback').value.trim(),
   };
   if (result.cq > result.cqTotal || result.mcq > result.mcqTotal) { showToast('A score cannot be higher than its full marks.'); return; }
-  state.results[subject] = result; localStorage.setItem('examio-results', JSON.stringify(state.results));
-  state.selectedSubject = subject; renderSubjectTabs(); renderResult(subject); showToast(`${subject} result published.`);
+  const button = event.submitter;
+  button.disabled = true;
+  button.textContent = 'Publishing…';
+  try {
+    await api.saveResult(subject, result);
+    state.results[subject] = result;
+    state.selectedSubject = subject; renderSubjectTabs(); renderResult(subject); showToast(`${subject} result published.`);
+  } catch (error) {
+    showToast(`Publish failed: ${error.message}`);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Publish subject result';
+  }
+}
+
+function mapExam(row) {
+  return {
+    id: row.id, title: row.title, subject: row.subject, className: row.class_name,
+    durationMinutes: row.duration_minutes, fullMarks: row.full_marks,
+    paperPath: row.paper_path || state.config.paperPath || null, paperUrl: DEFAULT_PAPER,
+  };
+}
+
+function mapResults(rows) {
+  return Object.fromEntries(rows.map(row => [row.subject, {
+    cq: row.cq_score, cqTotal: row.cq_total, mcq: row.mcq_score,
+    mcqTotal: row.mcq_total, feedback: row.teacher_note || '',
+  }]));
+}
+
+async function showAdminDashboard(session) {
+  await api.getAdminProfile();
+  state.adminSession = session;
+  document.querySelector('#admin-login-form').hidden = true;
+  document.querySelector('#admin-dashboard').hidden = false;
+  document.querySelector('#admin-user-email').textContent = session.user.email;
+  const exam = await api.fetchAdminExam();
+  if (exam) {
+    state.config = mapExam(exam);
+    applyExamConfig();
+    if (exam.paper_path) elements.paperPreview.src = await api.createPaperPreview(exam.paper_path);
+  }
+}
+
+async function hydrateRemoteData() {
+  if (!api?.isConfigured()) return;
+  try {
+    const [exam, rows] = await Promise.all([api.fetchPublishedExam(), api.fetchResults()]);
+    if (exam) { state.config = mapExam(exam); applyExamConfig(); }
+    if (rows.length) { state.results = mapResults(rows); state.selectedSubject = 'All'; renderSubjectTabs(); renderResult('All'); }
+  } catch (error) {
+    document.querySelector('#admin-login-status').textContent = `Backend setup required: ${error.message}`;
+  }
+  const session = await api.getSession();
+  if (session) {
+    try { await showAdminDashboard(session); }
+    catch (error) { document.querySelector('#admin-login-status').textContent = error.message; }
+  }
 }
 
 let toastTimeout;
@@ -208,11 +302,40 @@ document.querySelector('#new-session').addEventListener('click', resetExam);
 document.querySelector('#exam-settings-form').addEventListener('submit', saveExamSettings);
 document.querySelector('#result-settings-form').addEventListener('submit', saveSubjectResult);
 document.querySelector('#result-subject').addEventListener('change', event => loadResultEditor(event.target.value));
+document.querySelector('#admin-login-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const button = event.submitter;
+  const status = document.querySelector('#admin-login-status');
+  button.disabled = true;
+  button.textContent = 'Signing in…';
+  status.textContent = 'Checking administrator access…';
+  try {
+    const session = await api.signIn(document.querySelector('#admin-email').value.trim(), document.querySelector('#admin-password').value);
+    await showAdminDashboard(session);
+    event.target.reset();
+    showToast('Administrator signed in.');
+  } catch (error) {
+    await api.signOut();
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Sign in';
+  }
+});
+document.querySelector('#admin-sign-out').addEventListener('click', async () => {
+  await api.signOut();
+  state.adminSession = null;
+  document.querySelector('#admin-dashboard').hidden = true;
+  document.querySelector('#admin-login-form').hidden = false;
+  document.querySelector('#admin-login-status').textContent = 'Supabase authentication protects exam and result changes.';
+  showToast('Signed out.');
+});
 
 elements.paperInput.addEventListener('change', event => {
   const [file] = event.target.files; if (!file) return;
   if (!file.type.startsWith('image/')) { showToast('Choose an image file for the question paper.'); return; }
   if (file.size > 1.5 * 1024 * 1024) showToast('Large image selected; backend storage is recommended.');
+  state.pendingPaperFile = file;
   const reader = new FileReader();
   reader.addEventListener('load', () => { state.pendingPaperUrl = reader.result; elements.paperPreview.src = reader.result; });
   reader.readAsDataURL(file);
@@ -232,3 +355,4 @@ document.addEventListener('keydown', event => {
 window.addEventListener('beforeprint', showPrivacyCover);
 
 applyExamConfig(); renderSubjectTabs(); renderResult('All'); loadResultEditor('Science');
+hydrateRemoteData();

@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Examio — a focused timed question-paper and results portal.">
   <meta name="theme-color" content="#273338">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://cvvtqbbkpcbifgtevjrc.supabase.co; connect-src 'self' https://cvvtqbbkpcbifgtevjrc.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
   <title>Examio — Timed exam portal</title>
   <link rel="stylesheet" href="styles.css">
+  <script defer src="config.js"></script>
+  <script defer src="supabase.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -162,7 +165,23 @@
           <h1 id="admin-title">Set the next <em>exam.</em></h1>
         </div>
 
-        <div class="admin-grid">
+        <form id="admin-login-form" class="admin-login-card">
+          <span class="brand-mark" aria-hidden="true"><span></span></span>
+          <p class="eyebrow">Protected access</p>
+          <h2>Administrator sign in</h2>
+          <div class="form-grid">
+            <label class="field field-wide">Email<input id="admin-email" type="email" autocomplete="username" required></label>
+            <label class="field field-wide">Password<input id="admin-password" type="password" autocomplete="current-password" required></label>
+          </div>
+          <button class="primary-button" type="submit">Sign in</button>
+          <p id="admin-login-status" class="storage-note">Supabase authentication protects exam and result changes.</p>
+        </form>
+
+        <div id="admin-dashboard" class="admin-grid" hidden>
+          <div class="admin-session-bar">
+            <span>Signed in as <strong id="admin-user-email"></strong></span>
+            <button id="admin-sign-out" class="secondary-button" type="button">Sign out</button>
+          </div>
           <form id="exam-settings-form" class="admin-card">
             <div class="card-heading">
               <div><p class="eyebrow">Exam setup</p><h2>Paper and timing</h2></div>
@@ -203,7 +222,7 @@
               <label class="field field-wide">Teacher note<textarea id="admin-feedback" rows="4">Strong understanding of the core concepts. Add one more supporting step in longer written explanations.</textarea></label>
             </div>
             <button class="primary-button" type="submit">Publish subject result</button>
-            <p class="storage-note"><span>Prototype storage</span> Settings are saved in this browser until Supabase is connected.</p>
+            <p class="storage-note"><span>Connected storage</span> Published results are shared through Supabase.</p>
           </form>
         </div>
       </section>
