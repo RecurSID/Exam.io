@@ -1,6 +1,6 @@
 # Examio
 
-Examio is a no-login, timed question-paper viewer for lightweight exam sessions. It reveals a paper when the timer starts, automatically removes access when time expires, and presents CQ, MCQ, and combined result views.
+Examio is a no-login, scheduled question-paper viewer for lightweight exam sessions. It reveals image and PDF papers when the timer starts, automatically removes access when time expires, and presents CQ, MCQ, and combined result views.
 
 ## Run locally
 
@@ -41,9 +41,12 @@ Then open `http://localhost:4173`.
 
 ## What the prototype includes
 
-- A no-login candidate flow using the administrator's configured duration
-- An admin portal for exam timing, metadata, question-paper images, and subject results
-- A question paper rendered as a non-draggable image
+- A no-login candidate flow using server-authoritative timing
+- Strict fixed-time exams and flexible start windows (24 hours by default)
+- An admin exam library for creating and scheduling multiple exams
+- Multiple ordered PNG, JPG, WebP, SVG, and PDF question-paper files per exam
+- An upcoming-exam card with a live relative start time in Bangladesh time (UTC+6)
+- Exam-specific, subject-wise CQ and MCQ result publishing
 - Automatic expiry at countdown completion
 - Pause-on-tab-loss, watermarking, print blocking, and common capture-key deterrents
 - Subject-wise result views with CQ, MCQ, and combined scores

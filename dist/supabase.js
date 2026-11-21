@@ -11,13 +11,14 @@
     const headers = new Headers(options.headers || {});
     headers.set('apikey', apiKey);
     if (options.token) headers.set('Authorization', `Bearer ${options.token}`);
-    if (options.body && !(options.body instanceof Blob) && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
-      headers.set('Content-Type', 'application/json');
-    }
+    if (options.body && !(options.body instanceof Blob) && !(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     const response = await fetch(`${baseUrl}${path}`, { ...options, headers });
     const contentType = response.headers.get('content-type') || '';
     const payload = contentType.includes('application/json') ? await response.json() : await response.text();
-    if (!response.ok) throw new Error(payload?.msg || payload?.message || payload?.error_description || payload?.error || `Request failed (${response.status})`);
+    if (!response.ok) {
+      const message = payload?.msg || payload?.message || payload?.error_description || payload?.error || `Request failed (${response.status})`;
+      throw new Error(payload?.detail ? `${message}: ${payload.detail}` : message);
+    }
     return payload;
   }
 
@@ -32,26 +33,22 @@
     catch { return null; }
   }
 
-  async function refreshSession(session) {
-    if (!session?.refresh_token) return null;
-    const refreshed = await request('/auth/v1/token?grant_type=refresh_token', {
-      method: 'POST', body: JSON.stringify({ refresh_token: session.refresh_token }),
-    });
-    return saveSession(refreshed);
-  }
-
   async function getSession() {
     const session = storedSession();
     if (!session) return null;
     if (Number(session.expires_at) * 1000 > Date.now() + 60_000) return session;
-    try { return await refreshSession(session); }
-    catch { saveSession(null); return null; }
+    try {
+      const refreshed = await request('/auth/v1/token?grant_type=refresh_token', {
+        method: 'POST', body: JSON.stringify({ refresh_token: session.refresh_token }),
+      });
+      return saveSession(refreshed);
+    } catch {
+      return saveSession(null);
+    }
   }
 
   async function signIn(email, password) {
-    const session = await request('/auth/v1/token?grant_type=password', {
-      method: 'POST', body: JSON.stringify({ email, password }),
-    });
+    const session = await request('/auth/v1/token?grant_type=password', { method: 'POST', body: JSON.stringify({ email, password }) });
     return saveSession(session);
   }
 
@@ -63,74 +60,98 @@
     saveSession(null);
   }
 
-  async function fetchPublishedExam() {
-    const fields = 'id,title,subject,class_name,duration_minutes,full_marks,updated_at,status';
-    const rows = await request(`/rest/v1/exams?select=${fields}&status=eq.published&order=updated_at.desc&limit=1`);
-    return rows[0] || null;
-  }
-
-  async function fetchAdminExam() {
+  async function requireSession() {
     const session = await getSession();
     if (!session) throw new Error('Administrator sign-in required.');
-    const rows = await request('/rest/v1/exams?select=*&order=updated_at.desc&limit=1', { token: session.access_token });
-    return rows[0] || null;
+    return session;
   }
 
   async function getAdminProfile() {
-    const session = await getSession();
-    if (!session) throw new Error('Administrator sign-in required.');
+    const session = await requireSession();
     const rows = await request(`/rest/v1/profiles?id=eq.${encodeURIComponent(session.user.id)}&select=id,role`, { token: session.access_token });
     if (rows[0]?.role !== 'admin') throw new Error('This account does not have the administrator role.');
     return rows[0];
   }
 
-  async function fetchResults() {
-    return request('/rest/v1/results?select=subject,cq_score,cq_total,mcq_score,mcq_total,teacher_note,published_at&published_at=not.is.null&order=subject.asc');
+  async function fetchPortalExams() {
+    const fields = 'id,title,subject,class_name,duration_minutes,full_marks,status,availability_mode,starts_at,available_until,updated_at';
+    return request(`/rest/v1/exams?select=${fields}&status=eq.published&order=starts_at.asc`);
+  }
+
+  async function fetchAdminExams() {
+    const session = await requireSession();
+    return request('/rest/v1/exams?select=*&order=starts_at.desc', { token: session.access_token });
+  }
+
+  async function fetchExamFiles(examId) {
+    const session = await requireSession();
+    return request(`/rest/v1/exam_files?select=id,exam_id,storage_path,file_name,mime_type,sort_order&exam_id=eq.${encodeURIComponent(examId)}&order=sort_order.asc`, { token: session.access_token });
+  }
+
+  async function fetchResults(examId) {
+    if (!examId) return [];
+    return request(`/rest/v1/results?select=exam_id,subject,cq_score,cq_total,mcq_score,mcq_total,published_at&exam_id=eq.${encodeURIComponent(examId)}&published_at=not.is.null&order=subject.asc`);
   }
 
   async function saveExam(exam) {
-    const session = await getSession();
-    if (!session) throw new Error('Administrator sign-in required.');
+    const session = await requireSession();
     const payload = {
       title: exam.title, subject: exam.subject, class_name: exam.className,
       duration_minutes: exam.durationMinutes, full_marks: exam.fullMarks,
-      paper_path: exam.paperPath, status: 'published', updated_at: new Date().toISOString(),
+      paper_path: exam.paperPath || null, status: 'published',
+      availability_mode: exam.availabilityMode, starts_at: exam.startsAt,
+      available_until: exam.availabilityMode === 'window' ? exam.availableUntil : null,
+      updated_at: new Date().toISOString(),
     };
-    const common = { method: exam.id ? 'PATCH' : 'POST', token: session.access_token, body: JSON.stringify(payload), headers: { Prefer: 'return=representation' } };
-    const rows = await request(exam.id ? `/rest/v1/exams?id=eq.${encodeURIComponent(exam.id)}` : '/rest/v1/exams', common);
+    const options = { method: exam.id ? 'PATCH' : 'POST', token: session.access_token, body: JSON.stringify(payload), headers: { Prefer: 'return=representation' } };
+    const rows = await request(exam.id ? `/rest/v1/exams?id=eq.${encodeURIComponent(exam.id)}` : '/rest/v1/exams', options);
     return rows[0];
   }
 
-  async function saveResult(subject, result) {
-    const session = await getSession();
-    if (!session) throw new Error('Administrator sign-in required.');
+  async function saveExamFiles(examId, files) {
+    const session = await requireSession();
+    await request(`/rest/v1/exam_files?exam_id=eq.${encodeURIComponent(examId)}`, { method: 'DELETE', token: session.access_token });
+    if (!files.length) return [];
+    const payload = files.map((file, index) => ({
+      exam_id: examId, storage_path: file.storagePath, file_name: file.fileName,
+      mime_type: file.mimeType, sort_order: index,
+    }));
+    return request('/rest/v1/exam_files', {
+      method: 'POST', token: session.access_token, body: JSON.stringify(payload), headers: { Prefer: 'return=representation' },
+    });
+  }
+
+  async function saveResult(examId, subject, result) {
+    const session = await requireSession();
     const payload = {
-      subject, cq_score: result.cq, cq_total: result.cqTotal, mcq_score: result.mcq,
-      mcq_total: result.mcqTotal, teacher_note: result.feedback,
+      exam_id: examId, subject, cq_score: result.cq, cq_total: result.cqTotal,
+      mcq_score: result.mcq, mcq_total: result.mcqTotal, teacher_note: '',
       published_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     };
-    const rows = await request('/rest/v1/results?on_conflict=subject', {
+    const rows = await request('/rest/v1/results?on_conflict=exam_id,subject', {
       method: 'POST', token: session.access_token, body: JSON.stringify(payload),
       headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
     });
     return rows[0];
   }
 
-  async function uploadPaper(file) {
-    const session = await getSession();
-    if (!session) throw new Error('Administrator sign-in required.');
-    const safeName = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
-    const path = `${session.user.id}/${crypto.randomUUID()}-${safeName}`;
-    await request(`/storage/v1/object/question-papers/${path.split('/').map(encodeURIComponent).join('/')}`, {
-      method: 'POST', token: session.access_token, body: file,
-      headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'false' },
-    });
-    return path;
+  async function uploadPapers(files) {
+    const session = await requireSession();
+    const uploaded = [];
+    for (const file of files) {
+      const safeName = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
+      const path = `${session.user.id}/${crypto.randomUUID()}-${safeName}`;
+      await request(`/storage/v1/object/question-papers/${path.split('/').map(encodeURIComponent).join('/')}`, {
+        method: 'POST', token: session.access_token, body: file,
+        headers: { 'Content-Type': file.type || 'application/octet-stream', 'x-upsert': 'false' },
+      });
+      uploaded.push({ storagePath: path, fileName: file.name, mimeType: file.type || 'application/octet-stream' });
+    }
+    return uploaded;
   }
 
   async function createPaperPreview(path) {
-    const session = await getSession();
-    if (!session) throw new Error('Administrator sign-in required.');
+    const session = await requireSession();
     const signed = await request(`/storage/v1/object/sign/question-papers/${path.split('/').map(encodeURIComponent).join('/')}`, {
       method: 'POST', token: session.access_token, body: JSON.stringify({ expiresIn: 3600 }),
     });
@@ -145,7 +166,8 @@
   }
 
   window.examioApi = Object.freeze({
-    isConfigured, getSession, signIn, signOut, getAdminProfile, fetchPublishedExam, fetchAdminExam,
-    fetchResults, saveExam, saveResult, uploadPaper, createPaperPreview, startExam,
+    isConfigured, getSession, signIn, signOut, getAdminProfile,
+    fetchPortalExams, fetchAdminExams, fetchExamFiles, fetchResults,
+    saveExam, saveExamFiles, saveResult, uploadPapers, createPaperPreview, startExam,
   });
 })();

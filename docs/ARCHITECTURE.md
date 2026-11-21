@@ -4,21 +4,21 @@
 
 Examio is a buildless static application. `index.html` provides semantic structure, `styles.css` owns the responsive design system, `app.js` owns interface state, and `supabase.js` provides the browser API client.
 
-Supabase Postgres stores exam metadata and subject results. Supabase Auth and Row Level Security protect administrator writes. Papers live in a private Storage bucket. The `start-exam` Edge Function creates the authoritative deadline and returns a short-lived signed paper URL. Until the tracked Supabase migration and function are deployed, the bundled demonstration data remains visible as a frontend fallback.
+Supabase Postgres stores scheduled exams, ordered paper-file metadata, and exam-specific subject results. Supabase Auth and Row Level Security protect administrator writes. Images and PDFs live in a private Storage bucket. The `start-exam` Edge Function validates the schedule, creates the authoritative deadline, and returns short-lived signed URLs for every paper file.
 
 ## Runtime architecture
 
 ```text
 Candidate browser
   -> CDN / static web app
-  -> Supabase Data API (published metadata and results)
+  -> Supabase Data API (published schedules and results)
   -> Supabase Auth (administrator login)
   -> start-exam Edge Function
-       -> private Storage signed URL
+       -> private Storage signed URLs
        -> server-authoritative exam session
 ```
 
-The server is authoritative for exam start and end times. Paper URLs expire shortly after the configured session duration, while the browser removes the rendered paper at the exact session deadline.
+The server is authoritative for exam start and end times. A fixed exam ends for everyone at `starts_at + duration`, so a late starter receives only the remaining time. A flexible exam may begin between `starts_at` and `available_until`; each valid start receives the full duration. Paper URLs expire shortly after that session deadline, while the browser removes all rendered files at the exact deadline.
 
 ## Recommended free-first stack
 

@@ -75,6 +75,19 @@
           </form>
         </section>
 
+        <section id="upcoming-section" class="upcoming-section" hidden aria-labelledby="upcoming-title">
+          <div>
+            <p class="eyebrow">Upcoming next</p>
+            <h2 id="upcoming-title">Scheduled exam</h2>
+            <p id="upcoming-meta"></p>
+          </div>
+          <div class="upcoming-time">
+            <span>Bangladesh time</span>
+            <strong id="upcoming-date"></strong>
+            <small id="upcoming-countdown"></small>
+          </div>
+        </section>
+
         <section id="exam-session" class="session-panel" hidden aria-live="polite">
           <div class="session-toolbar">
             <div>
@@ -89,7 +102,7 @@
           <div class="progress-track" aria-hidden="true"><span id="timer-progress"></span></div>
           <div id="paper-frame" class="question-frame">
             <div id="watermark" class="watermark" aria-hidden="true"></div>
-            <img id="question-paper" src="assets/question-paper.svg" alt="Assessment question paper" draggable="false">
+            <div id="paper-pages" class="paper-pages" aria-label="Question paper"></div>
           </div>
           <div class="integrity-note"><span aria-hidden="true">◉</span> Focus protection is on. Leaving this window covers the paper.</div>
         </section>
@@ -176,10 +189,17 @@
             <span>Signed in as <strong id="admin-user-email"></strong></span>
             <button id="admin-sign-out" class="secondary-button" type="button">Sign out</button>
           </div>
+          <section class="admin-card admin-exam-library">
+            <div class="card-heading">
+              <div><p class="eyebrow">Exam library</p><h2>Scheduled exams</h2></div>
+              <button id="admin-new-exam" class="secondary-button" type="button">New exam</button>
+            </div>
+            <div id="admin-exam-list" class="admin-exam-list"></div>
+          </section>
           <form id="exam-settings-form" class="admin-card">
             <div class="card-heading">
-              <div><p class="eyebrow">Exam setup</p><h2>Paper and timing</h2></div>
-              <span>Draft</span>
+              <div><p class="eyebrow">Exam setup</p><h2 id="admin-form-title">Create exam</h2></div>
+              <span id="admin-form-status">New</span>
             </div>
             <div class="form-grid">
               <label class="field field-wide">Exam title<input id="admin-exam-title" required placeholder="e.g. Midterm Examination"></label>
@@ -187,19 +207,32 @@
               <label class="field">Class<input id="admin-class" required placeholder="e.g. Class 10"></label>
               <label class="field">Duration (minutes)<input id="admin-duration" type="number" min="1" max="360" required value="60"></label>
               <label class="field">Full marks<input id="admin-marks" type="number" min="1" max="1000" required value="100"></label>
-              <label class="field field-wide file-field">Question-paper image
-                <input id="admin-paper" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
-                <span>PNG, JPG, WebP or SVG · recommended under 1.5 MB</span>
+              <label class="field">Start policy
+                <select id="admin-availability-mode">
+                  <option value="fixed">Strict fixed start</option>
+                  <option value="window" selected>Start within a window</option>
+                </select>
+              </label>
+              <label class="field">Start time · Bangladesh (UTC+6)
+                <input id="admin-starts-at" type="datetime-local" required>
+              </label>
+              <label id="window-hours-field" class="field field-wide">Start window (hours)
+                <input id="admin-window-hours" type="number" min="1" max="168" value="24" required>
+                <span>Candidate may begin anytime during this window and receives the full exam duration.</span>
+              </label>
+              <label class="field field-wide file-field">Question-paper files
+                <input id="admin-paper" type="file" multiple accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf">
+                <span>Multiple PNG, JPG, WebP, SVG or PDF files · 25 MB maximum per file</span>
               </label>
             </div>
-            <div class="admin-preview"><img id="admin-paper-preview" src="assets/question-paper.svg" alt="Current question-paper preview"></div>
-            <button class="primary-button" type="submit">Save exam settings</button>
+            <div id="admin-file-list" class="admin-file-list"><p>No files selected.</p></div>
+            <button class="primary-button" type="submit">Publish exam</button>
           </form>
 
           <form id="result-settings-form" class="admin-card">
             <div class="card-heading">
               <div><p class="eyebrow">Results</p><h2>Publish by subject</h2></div>
-              <span>Subject-wise</span>
+              <span id="result-exam-label">Choose an exam</span>
             </div>
             <div class="form-grid">
               <label class="field field-wide">Subject<input id="result-subject" required placeholder="e.g. Mathematics"></label>

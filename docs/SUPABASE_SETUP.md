@@ -11,7 +11,7 @@ npx supabase login
 npx supabase link --project-ref cvvtqbbkpcbifgtevjrc
 ```
 
-Apply the tracked schema, grants, policies, and private storage bucket:
+Apply all tracked migrations, including scheduling, multi-file papers, exam-specific results, grants, policies, and the private storage bucket:
 
 ```bash
 npx supabase db push
@@ -42,11 +42,11 @@ The user can then sign in through Examio's Admin tab. Candidate access remains l
 
 ## Security model
 
-- Anonymous visitors can read only published exam metadata and published results.
+- Anonymous visitors can read only published exam schedules and published results.
 - The private `paper_path` column is not granted to anonymous visitors.
 - Only authenticated users with `profiles.role = 'admin'` can change exams, results, or question-paper objects.
 - Question papers are stored in a private bucket.
-- The `start-exam` function validates the published exam, creates a server-timed session, and returns a short-lived signed paper URL.
+- The `start-exam` function validates the published exam and its fixed/window schedule, creates a server-timed session, and returns short-lived signed URLs for its ordered files.
 - The secret/service-role key exists only inside the Edge Function environment.
 
 ## Verify
@@ -54,8 +54,10 @@ The user can then sign in through Examio's Admin tab. Candidate access remains l
 After deployment:
 
 1. Sign into the Admin tab.
-2. Upload a question-paper image and publish the exam.
-3. Publish at least one subject result.
-4. Sign out or use a private browser window.
-5. Confirm the candidate can start the exam but cannot access the paper before starting.
+2. Create a fixed-time or flexible-window exam in Bangladesh time.
+3. Upload one or more question-paper images/PDFs and publish the exam.
+4. Create another future exam and confirm it appears under **Upcoming next**.
+5. Publish at least one subject result for the selected exam.
+6. Sign out or use a private browser window.
+7. Confirm the candidate can start only inside the configured schedule and cannot access the paper before starting.
 
