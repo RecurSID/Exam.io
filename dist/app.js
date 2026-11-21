@@ -1,30 +1,15 @@
 const DEFAULT_PAPER = 'assets/question-paper.svg';
+const COMPLETED_EXAM_KEY = 'examio-completed-exam';
 const api = window.examioApi;
 
 const defaultConfig = {
-  title: 'General Science Assessment', subject: 'Science', className: 'Class 10',
-  durationMinutes: 15, fullMarks: 50, paperUrl: DEFAULT_PAPER,
+  title: '', subject: '', className: '', durationMinutes: 60, fullMarks: 100, paperUrl: DEFAULT_PAPER,
 };
-
-const defaultResults = {
-  Bangla: { cq: 36, cqTotal: 50, mcq: 41, mcqTotal: 50, feedback: 'Good written expression and careful reading. Keep answers concise.' },
-  English: { cq: 39, cqTotal: 50, mcq: 43, mcqTotal: 50, feedback: 'Strong comprehension and vocabulary. Review punctuation in long answers.' },
-  Mathematics: { cq: 42, cqTotal: 50, mcq: 46, mcqTotal: 50, feedback: 'Excellent method and accuracy. Show the final unit consistently.' },
-  Science: { cq: 38, cqTotal: 50, mcq: 44, mcqTotal: 50, feedback: 'Strong understanding of the core concepts. Add one more supporting step in longer written explanations.' },
-  ICT: { cq: 40, cqTotal: 50, mcq: 45, mcqTotal: 50, feedback: 'Confident technical knowledge with accurate objective answers.' },
-};
-
-function readStored(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) || fallback; }
-  catch { return fallback; }
-}
 
 const state = {
-  running: false, ended: false, totalSeconds: 900, remainingSeconds: 900,
-  deadline: null, timerId: null,
-  config: { ...defaultConfig, ...readStored('examio-config', {}) },
-  results: { ...defaultResults, ...readStored('examio-results', {}) },
-  selectedSubject: 'All', pendingPaperUrl: null, pendingPaperFile: null, adminSession: null,
+  running: false, ended: false, deadline: null, timerId: null,
+  totalSeconds: 0, remainingSeconds: 0, config: null, results: {},
+  selectedSubject: null, pendingPaperFile: null, adminSession: null,
 };
 
 const elements = {
@@ -37,6 +22,7 @@ const elements = {
   watermark: document.querySelector('#watermark'), toast: document.querySelector('#toast'),
   questionPaper: document.querySelector('#question-paper'), paperPreview: document.querySelector('#admin-paper-preview'),
   paperInput: document.querySelector('#admin-paper'), subjectTabs: document.querySelector('#subject-tabs'),
+  resultsEmpty: document.querySelector('#results-empty'), resultsContent: document.querySelector('#results-content'),
 };
 
 function showView(name) {
@@ -46,25 +32,50 @@ function showView(name) {
     button.classList.toggle('is-active', active);
     button.setAttribute('aria-current', active ? 'page' : 'false');
   });
+  if (name === 'results') renderResultsState();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function applyExamConfig() {
-  const config = state.config;
-  document.querySelector('#exam-card-title').textContent = config.title;
-  document.querySelector('#exam-card-meta').textContent = `${config.className} · CQ + MCQ · ${config.fullMarks} marks`;
-  document.querySelector('#configured-duration').textContent = `${config.durationMinutes} minutes`;
-  document.querySelector('#configured-subject').textContent = config.subject;
-  document.querySelector('#live-subject').textContent = `${config.subject} · Live`;
-  elements.questionPaper.src = config.paperUrl || DEFAULT_PAPER;
-  elements.questionPaper.alt = `${config.subject} question paper`;
-  elements.paperPreview.src = config.paperUrl || DEFAULT_PAPER;
+function populateAdminForm(config = defaultConfig) {
   document.querySelector('#admin-exam-title').value = config.title;
   document.querySelector('#admin-subject').value = config.subject;
   document.querySelector('#admin-class').value = config.className;
   document.querySelector('#admin-duration').value = config.durationMinutes;
   document.querySelector('#admin-marks').value = config.fullMarks;
+}
+
+function applyExamConfig() {
+  const config = state.config;
+  const startButton = elements.startForm.querySelector('button[type="submit"]');
+  const readiness = document.querySelector('#readiness');
+  populateAdminForm(config || defaultConfig);
+
+  if (!config) {
+    document.querySelector('#exam-card-status').textContent = 'Exam status';
+    document.querySelector('#exam-card-title').textContent = 'No exam published';
+    document.querySelector('#exam-card-meta').textContent = 'An administrator needs to create an exam first.';
+    document.querySelector('#configured-duration').textContent = '—';
+    document.querySelector('#configured-subject').textContent = '—';
+    document.querySelector('#attempt-title').textContent = 'No exam available';
+    document.querySelector('.orbit-clock').textContent = '—';
+    startButton.disabled = true;
+    readiness.disabled = true;
+    return;
+  }
+
+  const completed = localStorage.getItem(COMPLETED_EXAM_KEY) === config.id;
+  document.querySelector('#exam-card-status').textContent = completed ? 'Completed' : 'Ready paper';
+  document.querySelector('#exam-card-title').textContent = config.title;
+  document.querySelector('#exam-card-meta').textContent = `${config.className} · CQ + MCQ · ${config.fullMarks} marks`;
+  document.querySelector('#configured-duration').textContent = `${config.durationMinutes} minutes`;
+  document.querySelector('#configured-subject').textContent = config.subject;
+  document.querySelector('#live-subject').textContent = `${config.subject} · Live`;
+  document.querySelector('#attempt-title').textContent = completed ? 'Exam already completed' : 'Begin a focused attempt';
   document.querySelector('.orbit-clock').innerHTML = `${config.durationMinutes}<span>min</span>`;
+  elements.questionPaper.src = DEFAULT_PAPER;
+  elements.questionPaper.alt = `${config.subject} question paper`;
+  startButton.disabled = completed;
+  readiness.disabled = completed;
 }
 
 function formatTime(seconds) {
@@ -83,51 +94,67 @@ function updateTimer() {
 
 async function startExam(event) {
   event.preventDefault();
-  const startButton = elements.startForm.querySelector('button[type="submit"]');
+  if (!state.config?.id) { showToast('No exam is currently published.'); return; }
+  if (localStorage.getItem(COMPLETED_EXAM_KEY) === state.config.id) { showToast('This exam has already been completed.'); return; }
+
+  const startButton = event.submitter;
   startButton.disabled = true;
   startButton.textContent = 'Opening paper…';
   try {
-    if (state.config.id && api?.isConfigured()) {
-      const session = await api.startExam(state.config.id);
-      state.deadline = new Date(session.expires_at).getTime();
-      state.totalSeconds = Math.max(1, Math.round((state.deadline - new Date(session.started_at).getTime()) / 1000));
-      elements.questionPaper.src = session.paper_url;
-    } else {
-      state.totalSeconds = Number(state.config.durationMinutes) * 60;
-      state.deadline = Date.now() + state.totalSeconds * 1000;
-      elements.questionPaper.src = state.config.paperUrl || DEFAULT_PAPER;
-    }
+    const session = await api.startExam(state.config.id);
+    state.deadline = new Date(session.expires_at).getTime();
+    state.totalSeconds = Math.max(1, Math.round((state.deadline - new Date(session.started_at).getTime()) / 1000));
+    state.remainingSeconds = Math.max(0, Math.ceil((state.deadline - Date.now()) / 1000));
+    elements.questionPaper.src = session.paper_url;
   } catch (error) {
     showToast(`Unable to start: ${error.message}`);
     startButton.disabled = false;
     startButton.textContent = 'Start exam';
     return;
   }
-  state.remainingSeconds = Math.max(0, Math.ceil((state.deadline - Date.now()) / 1000));
-  state.running = true; state.ended = false;
-  elements.startPanel.hidden = true; elements.expiredPanel.hidden = true; elements.sessionPanel.hidden = false;
+
+  state.running = true;
+  state.ended = false;
+  elements.startPanel.hidden = true;
+  elements.expiredPanel.hidden = true;
+  elements.sessionPanel.hidden = false;
   elements.timer.textContent = formatTime(state.remainingSeconds);
   elements.timerProgress.style.width = '100%';
-  setWatermark(); clearInterval(state.timerId);
+  setWatermark();
+  clearInterval(state.timerId);
   state.timerId = window.setInterval(updateTimer, 250);
-  updateTimer(); elements.sessionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  showToast('Exam started. Focus protection is active.');
-  startButton.disabled = false;
+  updateTimer();
+  elements.sessionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   startButton.textContent = 'Start exam';
+  showToast('Exam started. Focus protection is active.');
 }
 
 function endExam() {
-  state.running = false; state.ended = true;
-  clearInterval(state.timerId); state.timerId = null;
-  elements.sessionPanel.hidden = true; elements.expiredPanel.hidden = false; elements.privacyCover.hidden = true;
+  state.running = false;
+  state.ended = true;
+  clearInterval(state.timerId);
+  state.timerId = null;
+  elements.sessionPanel.hidden = true;
+  elements.expiredPanel.hidden = false;
+  elements.privacyCover.hidden = true;
+  if (state.config?.id) localStorage.setItem(COMPLETED_EXAM_KEY, state.config.id);
+  applyExamConfig();
+  renderResultsState();
   document.title = 'Session complete · Examio';
   elements.expiredPanel.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 function resetExam() {
-  state.running = false; state.ended = false; clearInterval(state.timerId);
-  elements.startForm.reset(); elements.sessionPanel.hidden = true; elements.expiredPanel.hidden = true; elements.startPanel.hidden = false;
-  document.title = 'Examio — Timed exam portal'; showView('exam');
+  state.running = false;
+  state.ended = false;
+  clearInterval(state.timerId);
+  elements.startForm.reset();
+  elements.sessionPanel.hidden = true;
+  elements.expiredPanel.hidden = true;
+  elements.startPanel.hidden = false;
+  applyExamConfig();
+  document.title = 'Examio — Timed exam portal';
+  showView('exam');
 }
 
 function setWatermark() {
@@ -142,39 +169,39 @@ function aggregateResults() {
   return Object.values(state.results).reduce((total, item) => ({
     cq: total.cq + Number(item.cq), cqTotal: total.cqTotal + Number(item.cqTotal),
     mcq: total.mcq + Number(item.mcq), mcqTotal: total.mcqTotal + Number(item.mcqTotal),
-    feedback: 'A complete view across all published subjects.',
   }), { cq: 0, cqTotal: 0, mcq: 0, mcqTotal: 0 });
 }
 
 function renderSubjectTabs() {
-  const subjects = ['All', ...Object.keys(state.results)];
+  const available = Object.keys(state.results);
+  const subjects = available.length > 1 ? ['All', ...available] : available;
+  if (!subjects.includes(state.selectedSubject)) state.selectedSubject = subjects[0] || null;
   elements.subjectTabs.innerHTML = subjects.map(subject => `<button class="result-tab${subject === state.selectedSubject ? ' is-active' : ''}" role="tab" aria-selected="${subject === state.selectedSubject}" data-subject="${subject}">${subject}</button>`).join('');
   elements.subjectTabs.querySelectorAll('.result-tab').forEach(tab => tab.addEventListener('click', () => {
-    state.selectedSubject = tab.dataset.subject; renderSubjectTabs(); renderResult(state.selectedSubject);
+    state.selectedSubject = tab.dataset.subject;
+    renderSubjectTabs();
+    renderResult(state.selectedSubject);
   }));
 }
 
 function resultRows(subject, data) {
   if (subject === 'All') return Object.entries(state.results).map(([name, item]) => [name, Math.round((Number(item.cq) + Number(item.mcq)) / (Number(item.cqTotal) + Number(item.mcqTotal)) * 100)]);
   return [
-    ['Creative questions', Math.round(Number(data.cq) / Number(data.cqTotal) * 100)],
-    ['Multiple choice', Math.round(Number(data.mcq) / Number(data.mcqTotal) * 100)],
+    ['CQ', Math.round(Number(data.cq) / Number(data.cqTotal) * 100)],
+    ['MCQ', Math.round(Number(data.mcq) / Number(data.mcqTotal) * 100)],
     ['Overall', Math.round((Number(data.cq) + Number(data.mcq)) / (Number(data.cqTotal) + Number(data.mcqTotal)) * 100)],
   ];
 }
 
 function renderResult(subject) {
+  if (!subject || !Object.keys(state.results).length) return;
   const data = subject === 'All' ? aggregateResults() : state.results[subject];
   const score = Number(data.cq) + Number(data.mcq);
   const total = Number(data.cqTotal) + Number(data.mcqTotal);
   const percent = Math.round(score / total * 100);
   document.querySelector('#score-value').textContent = score;
   document.querySelector('#score-unit').textContent = `/${total}`;
-  document.querySelector('#score-label').textContent = subject === 'All' ? 'All subjects' : subject;
-  document.querySelector('#score-grade').textContent = percent >= 80 ? 'Excellent work' : percent >= 65 ? 'Good progress' : 'Keep improving';
-  document.querySelector('#score-summary').textContent = subject === 'All' ? 'A complete view across every published subject.' : `CQ and MCQ performance for ${subject}.`;
-  document.querySelector('#result-note').textContent = subject === 'All' ? 'All subjects' : subject;
-  document.querySelector('#teacher-note').textContent = `“${data.feedback || 'Result published.'}”`;
+  document.querySelector('#score-label').textContent = subject === 'All' ? 'Overall' : subject;
   document.querySelector('#score-ring').style.setProperty('--score', percent);
   document.querySelector('#cq-score').innerHTML = `${data.cq}<span>/${data.cqTotal}</span>`;
   document.querySelector('#mcq-score').innerHTML = `${data.mcq}<span>/${data.mcqTotal}</span>`;
@@ -183,26 +210,47 @@ function renderResult(subject) {
   document.querySelector('#breakdown-list').innerHTML = resultRows(subject, data).map(([label, value]) => `<div class="breakdown-row"><span>${label}</span><div class="row-track"><i style="width:${value}%"></i></div><strong>${value}%</strong></div>`).join('');
 }
 
+function renderResultsState() {
+  const completed = Boolean(state.config?.id && localStorage.getItem(COMPLETED_EXAM_KEY) === state.config.id);
+  const hasResults = Object.keys(state.results).length > 0;
+  elements.resultsEmpty.hidden = completed && hasResults;
+  elements.resultsContent.hidden = !(completed && hasResults);
+  if (!completed) {
+    document.querySelector('#results-empty-title').textContent = 'No exam taken';
+    document.querySelector('#results-empty-copy').textContent = state.config ? 'Complete the published exam to see results.' : 'No exam is currently published.';
+  } else if (!hasResults) {
+    document.querySelector('#results-empty-title').textContent = 'Results not published';
+    document.querySelector('#results-empty-copy').textContent = 'Your exam is complete. Results will appear after the administrator publishes them.';
+  } else {
+    renderSubjectTabs();
+    renderResult(state.selectedSubject);
+  }
+}
+
 async function saveExamSettings(event) {
   event.preventDefault();
   const button = event.submitter;
   button.disabled = true;
   button.textContent = 'Publishing…';
   try {
-    let paperPath = state.config.paperPath || null;
+    let paperPath = state.config?.paperPath || null;
     if (state.pendingPaperFile) paperPath = await api.uploadPaper(state.pendingPaperFile);
     if (!paperPath) throw new Error('Upload a question-paper image before publishing.');
     const draft = {
-      id: state.config.id, paperPath,
-    title: document.querySelector('#admin-exam-title').value.trim(), subject: document.querySelector('#admin-subject').value,
-    className: document.querySelector('#admin-class').value.trim(), durationMinutes: Number(document.querySelector('#admin-duration').value),
-      fullMarks: Number(document.querySelector('#admin-marks').value), paperUrl: DEFAULT_PAPER,
+      id: state.config?.id, paperPath,
+      title: document.querySelector('#admin-exam-title').value.trim(),
+      subject: document.querySelector('#admin-subject').value.trim(),
+      className: document.querySelector('#admin-class').value.trim(),
+      durationMinutes: Number(document.querySelector('#admin-duration').value),
+      fullMarks: Number(document.querySelector('#admin-marks').value),
     };
     const saved = await api.saveExam(draft);
     state.config = mapExam(saved);
     state.pendingPaperFile = null;
     applyExamConfig();
+    document.querySelector('#result-subject').value = state.config.subject;
     elements.paperPreview.src = await api.createPaperPreview(paperPath);
+    renderResultsState();
     showToast('Exam published to Supabase.');
   } catch (error) {
     showToast(`Publish failed: ${error.message}`);
@@ -213,20 +261,21 @@ async function saveExamSettings(event) {
 }
 
 function loadResultEditor(subject) {
-  const data = state.results[subject] || defaultResults.Science;
-  document.querySelector('#admin-cq-score').value = data.cq; document.querySelector('#admin-cq-total').value = data.cqTotal;
-  document.querySelector('#admin-mcq-score').value = data.mcq; document.querySelector('#admin-mcq-total').value = data.mcqTotal;
-  document.querySelector('#admin-feedback').value = data.feedback || '';
+  const data = state.results[subject] || { cq: 0, cqTotal: 50, mcq: 0, mcqTotal: 50 };
+  document.querySelector('#admin-cq-score').value = data.cq;
+  document.querySelector('#admin-cq-total').value = data.cqTotal;
+  document.querySelector('#admin-mcq-score').value = data.mcq;
+  document.querySelector('#admin-mcq-total').value = data.mcqTotal;
 }
 
 async function saveSubjectResult(event) {
   event.preventDefault();
-  const subject = document.querySelector('#result-subject').value;
+  const subject = document.querySelector('#result-subject').value.trim();
   const result = {
     cq: Number(document.querySelector('#admin-cq-score').value), cqTotal: Number(document.querySelector('#admin-cq-total').value),
-    mcq: Number(document.querySelector('#admin-mcq-score').value), mcqTotal: Number(document.querySelector('#admin-mcq-total').value),
-    feedback: document.querySelector('#admin-feedback').value.trim(),
+    mcq: Number(document.querySelector('#admin-mcq-score').value), mcqTotal: Number(document.querySelector('#admin-mcq-total').value), feedback: '',
   };
+  if (!subject) { showToast('Enter a subject.'); return; }
   if (result.cq > result.cqTotal || result.mcq > result.mcqTotal) { showToast('A score cannot be higher than its full marks.'); return; }
   const button = event.submitter;
   button.disabled = true;
@@ -234,7 +283,9 @@ async function saveSubjectResult(event) {
   try {
     await api.saveResult(subject, result);
     state.results[subject] = result;
-    state.selectedSubject = subject; renderSubjectTabs(); renderResult(subject); showToast(`${subject} result published.`);
+    state.selectedSubject = subject;
+    renderResultsState();
+    showToast(`${subject} result published.`);
   } catch (error) {
     showToast(`Publish failed: ${error.message}`);
   } finally {
@@ -247,7 +298,7 @@ function mapExam(row) {
   return {
     id: row.id, title: row.title, subject: row.subject, className: row.class_name,
     durationMinutes: row.duration_minutes, fullMarks: row.full_marks,
-    paperPath: row.paper_path || state.config.paperPath || null, paperUrl: DEFAULT_PAPER,
+    paperPath: row.paper_path || state.config?.paperPath || null, paperUrl: DEFAULT_PAPER,
   };
 }
 
@@ -268,7 +319,11 @@ async function showAdminDashboard(session) {
   if (exam) {
     state.config = mapExam(exam);
     applyExamConfig();
+    document.querySelector('#result-subject').value = exam.subject;
+    loadResultEditor(exam.subject);
     if (exam.paper_path) elements.paperPreview.src = await api.createPaperPreview(exam.paper_path);
+  } else {
+    populateAdminForm();
   }
 }
 
@@ -276,10 +331,13 @@ async function hydrateRemoteData() {
   if (!api?.isConfigured()) return;
   try {
     const [exam, rows] = await Promise.all([api.fetchPublishedExam(), api.fetchResults()]);
-    if (exam) { state.config = mapExam(exam); applyExamConfig(); }
-    if (rows.length) { state.results = mapResults(rows); state.selectedSubject = 'All'; renderSubjectTabs(); renderResult('All'); }
+    state.config = exam ? mapExam(exam) : null;
+    state.results = mapResults(rows);
+    state.selectedSubject = Object.keys(state.results).length > 1 ? 'All' : Object.keys(state.results)[0] || null;
+    applyExamConfig();
+    renderResultsState();
   } catch (error) {
-    document.querySelector('#admin-login-status').textContent = `Backend setup required: ${error.message}`;
+    document.querySelector('#admin-login-status').textContent = `Backend unavailable: ${error.message}`;
   }
   const session = await api.getSession();
   if (session) {
@@ -290,18 +348,22 @@ async function hydrateRemoteData() {
 
 let toastTimeout;
 function showToast(message) {
-  clearTimeout(toastTimeout); elements.toast.textContent = message; elements.toast.classList.add('is-visible');
+  clearTimeout(toastTimeout);
+  elements.toast.textContent = message;
+  elements.toast.classList.add('is-visible');
   toastTimeout = setTimeout(() => elements.toast.classList.remove('is-visible'), 2800);
 }
 
 elements.navButtons.forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
+document.querySelectorAll('[data-view-link]').forEach(button => button.addEventListener('click', () => showView(button.dataset.viewLink)));
 elements.startForm.addEventListener('submit', startExam);
 elements.resumeButton.addEventListener('click', () => { elements.privacyCover.hidden = true; updateTimer(); });
 document.querySelector('#view-results').addEventListener('click', () => showView('results'));
 document.querySelector('#new-session').addEventListener('click', resetExam);
 document.querySelector('#exam-settings-form').addEventListener('submit', saveExamSettings);
 document.querySelector('#result-settings-form').addEventListener('submit', saveSubjectResult);
-document.querySelector('#result-subject').addEventListener('change', event => loadResultEditor(event.target.value));
+document.querySelector('#result-subject').addEventListener('change', event => loadResultEditor(event.target.value.trim()));
+
 document.querySelector('#admin-login-form').addEventListener('submit', async event => {
   event.preventDefault();
   const button = event.submitter;
@@ -322,6 +384,7 @@ document.querySelector('#admin-login-form').addEventListener('submit', async eve
     button.textContent = 'Sign in';
   }
 });
+
 document.querySelector('#admin-sign-out').addEventListener('click', async () => {
   await api.signOut();
   state.adminSession = null;
@@ -332,12 +395,13 @@ document.querySelector('#admin-sign-out').addEventListener('click', async () => 
 });
 
 elements.paperInput.addEventListener('change', event => {
-  const [file] = event.target.files; if (!file) return;
+  const [file] = event.target.files;
+  if (!file) return;
   if (!file.type.startsWith('image/')) { showToast('Choose an image file for the question paper.'); return; }
   if (file.size > 1.5 * 1024 * 1024) showToast('Large image selected; backend storage is recommended.');
   state.pendingPaperFile = file;
   const reader = new FileReader();
-  reader.addEventListener('load', () => { state.pendingPaperUrl = reader.result; elements.paperPreview.src = reader.result; });
+  reader.addEventListener('load', () => { elements.paperPreview.src = reader.result; });
   reader.readAsDataURL(file);
 });
 
@@ -349,10 +413,13 @@ document.addEventListener('keydown', event => {
   if (!state.running) return;
   const key = event.key.toLowerCase();
   if (event.key === 'PrintScreen' || ((event.ctrlKey || event.metaKey) && (key === 'p' || key === 's'))) {
-    event.preventDefault(); showPrivacyCover(); showToast('Capture and printing controls are disabled in this session.');
+    event.preventDefault();
+    showPrivacyCover();
+    showToast('Capture and printing controls are disabled in this session.');
   }
 });
 window.addEventListener('beforeprint', showPrivacyCover);
 
-applyExamConfig(); renderSubjectTabs(); renderResult('All'); loadResultEditor('Science');
+applyExamConfig();
+renderResultsState();
 hydrateRemoteData();

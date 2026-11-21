@@ -33,6 +33,7 @@ Then open `http://localhost:4173`.
 │   ├── BACKEND.md
 │   ├── DESIGN-SYSTEM.md
 │   ├── DEPLOYMENT.md
+│   ├── HOSTING.md
 │   ├── SECURITY.md
 │   └── SUPABASE_SETUP.md
 └── README.md
@@ -56,4 +57,8 @@ A website cannot reliably stop operating-system screenshots or external cameras.
 ## Supabase backend
 
 The frontend is connected to Supabase for authenticated administrators, Postgres result data, private question-paper storage, signed URLs, and server-authoritative exam sessions. Apply the tracked migration and deploy the Edge Function by following [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md).
+
+## Hosting
+
+The included GitHub Actions workflow deploys `dist/` to GitHub Pages. See [docs/HOSTING.md](docs/HOSTING.md) for activation steps and the Vercel alternative.
 

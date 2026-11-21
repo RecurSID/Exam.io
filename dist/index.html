@@ -24,7 +24,7 @@
         <button class="nav-button" type="button" data-view="results">Results</button>
         <button class="nav-button" type="button" data-view="admin">Admin</button>
       </nav>
-      <div class="session-chip"><span class="status-dot"></span>No login · Demo</div>
+      <div class="session-chip"><span class="status-dot"></span>No login required</div>
     </header>
 
     <main>
@@ -51,28 +51,27 @@
               <div class="paper-lock">✓</div>
             </div>
             <div>
-              <p class="eyebrow">Ready paper</p>
-              <h2 id="exam-card-title">General Science Assessment</h2>
-              <p id="exam-card-meta">Class 10 · CQ + MCQ · 50 marks</p>
+              <p class="eyebrow" id="exam-card-status">Exam status</p>
+              <h2 id="exam-card-title">No exam published</h2>
+              <p id="exam-card-meta">An administrator needs to create an exam first.</p>
             </div>
           </article>
 
           <form id="start-form" class="control-card">
             <div>
               <p class="eyebrow">Session setup</p>
-              <h2>Begin a focused attempt</h2>
-              <p>The paper stays concealed until the timer begins.</p>
+              <h2 id="attempt-title">No exam available</h2>
             </div>
             <div class="configured-exam">
-              <div><span>Time</span><strong id="configured-duration">15 minutes</strong></div>
-              <div><span>Subject</span><strong id="configured-subject">Science</strong></div>
+              <div><span>Time</span><strong id="configured-duration">—</strong></div>
+              <div><span>Subject</span><strong id="configured-subject">—</strong></div>
             </div>
             <label class="consent-row">
               <input id="readiness" type="checkbox" required>
               <span>I understand the paper closes when time expires.</span>
             </label>
-            <button class="primary-button" type="submit">Start exam</button>
-            <p class="microcopy">No account or personal data required for this demo.</p>
+            <button class="primary-button" type="submit" disabled>Start exam</button>
+            <p class="microcopy">No candidate account required.</p>
           </form>
         </section>
 
@@ -102,7 +101,7 @@
           <p>The question paper has been removed from view automatically.</p>
           <div class="expired-actions">
             <button class="primary-button" id="view-results" type="button">View results</button>
-            <button class="secondary-button" id="new-session" type="button">New demo</button>
+            <button class="secondary-button" id="new-session" type="button">Back to exam room</button>
           </div>
         </section>
       </section>
@@ -113,49 +112,44 @@
             <p class="eyebrow">Performance</p>
             <h1 id="results-title">Subject-wise <em>results.</em></h1>
           </div>
-          <div class="result-badge"><span>Published</span>21 Nov 2026</div>
         </div>
 
-        <div id="subject-tabs" class="result-tabs" role="tablist" aria-label="Result subject"></div>
+        <section id="results-empty" class="empty-state">
+          <div class="seal-mark" aria-hidden="true">—</div>
+          <h2 id="results-empty-title">No exam taken</h2>
+          <p id="results-empty-copy">Complete the published exam to see results.</p>
+          <button class="primary-button" type="button" data-view-link="exam">Go to exam room</button>
+        </section>
 
-        <div class="results-grid">
-          <article class="score-card">
-            <div class="score-ring" id="score-ring">
-              <div><strong id="score-value">82</strong><span id="score-unit">/100</span></div>
-            </div>
-            <div>
-              <p class="eyebrow" id="score-label">Overall score</p>
-              <h2 id="score-grade">Excellent work</h2>
-              <p id="score-summary">A balanced performance across written reasoning and objective accuracy.</p>
-            </div>
-          </article>
+        <div id="results-content" hidden>
+          <div id="subject-tabs" class="result-tabs" role="tablist" aria-label="Result subject"></div>
 
-          <article class="metric-card accent-sage">
-            <span class="metric-icon">C</span>
-            <p>CQ score</p>
-            <strong id="cq-score">38<span>/50</span></strong>
-            <div class="mini-track"><span id="cq-bar" style="width:76%"></span></div>
-          </article>
-          <article class="metric-card accent-fern">
-            <span class="metric-icon">M</span>
-            <p>MCQ score</p>
-            <strong id="mcq-score">44<span>/50</span></strong>
-            <div class="mini-track"><span id="mcq-bar" style="width:88%"></span></div>
-          </article>
+          <div class="results-grid">
+            <article class="score-card">
+              <div class="score-ring" id="score-ring">
+                <div><strong id="score-value">0</strong><span id="score-unit">/0</span></div>
+              </div>
+              <p class="eyebrow" id="score-label">Overall</p>
+            </article>
 
-          <article class="breakdown-card">
-            <div class="card-heading">
-              <div><p class="eyebrow">Breakdown</p><h2>Subject performance</h2></div>
-              <span id="result-note">All subjects</span>
-            </div>
-            <div id="breakdown-list" class="breakdown-list"></div>
-          </article>
+            <article class="metric-card accent-sage">
+              <span class="metric-icon">C</span>
+              <p>CQ</p>
+              <strong id="cq-score">0<span>/0</span></strong>
+              <div class="mini-track"><span id="cq-bar"></span></div>
+            </article>
+            <article class="metric-card accent-fern">
+              <span class="metric-icon">M</span>
+              <p>MCQ</p>
+              <strong id="mcq-score">0<span>/0</span></strong>
+              <div class="mini-track"><span id="mcq-bar"></span></div>
+            </article>
 
-          <article class="feedback-card">
-            <p class="eyebrow">Teacher note</p>
-            <blockquote id="teacher-note">“Strong understanding of core concepts. Add one more supporting step in longer written explanations.”</blockquote>
-            <div class="teacher"><span>RA</span><div><strong>R. Ahmed</strong><small>Science faculty</small></div></div>
-          </article>
+            <article class="breakdown-card">
+              <div class="card-heading"><h2>Subjects</h2></div>
+              <div id="breakdown-list" class="breakdown-list"></div>
+            </article>
+          </div>
         </div>
       </section>
 
@@ -188,15 +182,11 @@
               <span>Draft</span>
             </div>
             <div class="form-grid">
-              <label class="field field-wide">Exam title<input id="admin-exam-title" required value="General Science Assessment"></label>
-              <label class="field">Subject
-                <select id="admin-subject">
-                  <option>Bangla</option><option>English</option><option>Mathematics</option><option selected>Science</option><option>ICT</option>
-                </select>
-              </label>
-              <label class="field">Class<input id="admin-class" required value="Class 10"></label>
-              <label class="field">Duration (minutes)<input id="admin-duration" type="number" min="1" max="360" required value="15"></label>
-              <label class="field">Full marks<input id="admin-marks" type="number" min="1" max="1000" required value="50"></label>
+              <label class="field field-wide">Exam title<input id="admin-exam-title" required placeholder="e.g. Midterm Examination"></label>
+              <label class="field">Subject<input id="admin-subject" required placeholder="e.g. Mathematics"></label>
+              <label class="field">Class<input id="admin-class" required placeholder="e.g. Class 10"></label>
+              <label class="field">Duration (minutes)<input id="admin-duration" type="number" min="1" max="360" required value="60"></label>
+              <label class="field">Full marks<input id="admin-marks" type="number" min="1" max="1000" required value="100"></label>
               <label class="field field-wide file-field">Question-paper image
                 <input id="admin-paper" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml">
                 <span>PNG, JPG, WebP or SVG · recommended under 1.5 MB</span>
@@ -212,14 +202,11 @@
               <span>Subject-wise</span>
             </div>
             <div class="form-grid">
-              <label class="field field-wide">Subject
-                <select id="result-subject"><option>Bangla</option><option>English</option><option>Mathematics</option><option selected>Science</option><option>ICT</option></select>
-              </label>
-              <label class="field">CQ score<input id="admin-cq-score" type="number" min="0" required value="38"></label>
+              <label class="field field-wide">Subject<input id="result-subject" required placeholder="e.g. Mathematics"></label>
+              <label class="field">CQ score<input id="admin-cq-score" type="number" min="0" required value="0"></label>
               <label class="field">CQ full marks<input id="admin-cq-total" type="number" min="1" required value="50"></label>
-              <label class="field">MCQ score<input id="admin-mcq-score" type="number" min="0" required value="44"></label>
+              <label class="field">MCQ score<input id="admin-mcq-score" type="number" min="0" required value="0"></label>
               <label class="field">MCQ full marks<input id="admin-mcq-total" type="number" min="1" required value="50"></label>
-              <label class="field field-wide">Teacher note<textarea id="admin-feedback" rows="4">Strong understanding of the core concepts. Add one more supporting step in longer written explanations.</textarea></label>
             </div>
             <button class="primary-button" type="submit">Publish subject result</button>
             <p class="storage-note"><span>Connected storage</span> Published results are shared through Supabase.</p>
@@ -228,7 +215,7 @@
       </section>
     </main>
 
-    <footer><span>Examio · A calmer way to sit an exam</span><span>Prototype · No data is saved</span></footer>
+    <footer><span>Examio</span><span>Powered by Supabase</span></footer>
   </div>
 
   <div id="privacy-cover" class="privacy-cover" hidden>
