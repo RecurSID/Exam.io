@@ -8,6 +8,7 @@ const api = window.examioApi;
 const defaultConfig = {
   title: '', subject: '', className: '', durationMinutes: 60, fullMarks: 100,
   availabilityMode: 'window', startsAt: nextDhakaHour(), availableUntil: null,
+  studentNote: '', announcement: '',
 };
 
 const state = {
@@ -15,7 +16,7 @@ const state = {
   totalSeconds: 0, remainingSeconds: 0,
   exams: [], config: null, upcoming: null, results: {}, selectedSubject: null,
   adminSession: null, adminExams: [], editingExam: null,
-  editingFiles: [], pendingPaperFiles: [], adminResults: {},
+  editingFiles: [], pendingPaperFiles: [], adminResults: {}, editingResultSubject: null,
 };
 
 const elements = {
@@ -29,6 +30,7 @@ const elements = {
   subjectTabs: document.querySelector('#subject-tabs'), resultsEmpty: document.querySelector('#results-empty'),
   resultsContent: document.querySelector('#results-content'), upcomingSection: document.querySelector('#upcoming-section'),
   adminExamList: document.querySelector('#admin-exam-list'), adminFileList: document.querySelector('#admin-file-list'),
+  adminResultList: document.querySelector('#admin-result-list'), messageBoard: document.querySelector('#exam-message-board'),
 };
 
 function completedExamIds() {
@@ -75,6 +77,7 @@ function mapExam(row) {
     paperPath: row.paper_path || null, status: row.status,
     availabilityMode: row.availability_mode || 'window', startsAt: row.starts_at,
     availableUntil: row.available_until || null,
+    studentNote: row.student_note || '', announcement: row.announcement || '',
   };
 }
 
@@ -100,6 +103,20 @@ function renderCandidatePortal() {
   state.upcoming = state.exams.filter(exam => examPhase(exam, now) === 'upcoming').sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt))[0] || null;
   applyCandidateExam();
   renderUpcoming();
+  renderExamMessages();
+}
+
+function renderExamMessages() {
+  const exam = state.config || state.upcoming;
+  const announcement = exam?.announcement?.trim() || '';
+  const note = exam?.studentNote?.trim() || '';
+  const announcementCard = document.querySelector('#announcement-card');
+  const noteCard = document.querySelector('#student-note-card');
+  announcementCard.hidden = !announcement;
+  noteCard.hidden = !note;
+  elements.messageBoard.hidden = !announcement && !note;
+  document.querySelector('#exam-announcement').textContent = announcement;
+  document.querySelector('#exam-student-note').textContent = note;
 }
 
 function applyCandidateExam() {
@@ -206,6 +223,7 @@ function openExamSession(session, { scroll = true } = {}) {
   renderPaperFiles(session.files || []);
   state.running = true;
   elements.startPanel.hidden = true;
+  elements.messageBoard.hidden = true;
   elements.upcomingSection.hidden = true;
   elements.expiredPanel.hidden = true;
   elements.sessionPanel.hidden = false;
@@ -282,6 +300,7 @@ function endExam() {
   elements.expiredPanel.hidden = false;
   elements.privacyCover.hidden = true;
   renderCandidatePortal();
+  elements.messageBoard.hidden = true;
   loadCompletedResults();
   document.title = 'Session complete · Examio';
 }
@@ -389,8 +408,12 @@ function populateAdminForm(exam = defaultConfig) {
   document.querySelector('#admin-starts-at').value = toDhakaInput(exam.startsAt || nextDhakaHour());
   const hours = exam.availableUntil ? Math.max(1, Math.round((new Date(exam.availableUntil) - new Date(exam.startsAt)) / 3_600_000)) : 24;
   document.querySelector('#admin-window-hours').value = hours;
+  document.querySelector('#admin-student-note').value = exam.studentNote || '';
+  document.querySelector('#admin-announcement').value = exam.announcement || '';
   document.querySelector('#admin-form-title').textContent = exam.id ? 'Edit exam' : 'Create exam';
   document.querySelector('#admin-form-status').textContent = exam.id ? 'Published' : 'New';
+  document.querySelector('#save-exam-button').textContent = exam.id ? 'Update exam' : 'Create exam';
+  document.querySelector('#delete-exam-button').hidden = !exam.id;
   toggleWindowField();
 }
 
@@ -426,12 +449,15 @@ async function selectAdminExam(examId) {
   state.pendingPaperFiles = [];
   state.editingFiles = state.editingExam ? await api.fetchExamFiles(examId) : [];
   state.adminResults = state.editingExam ? mapResults(await api.fetchResults(examId)) : {};
+  state.editingResultSubject = null;
   populateAdminForm(state.editingExam || defaultConfig);
   renderAdminFiles();
   renderAdminExamList();
   document.querySelector('#result-exam-label').textContent = state.editingExam?.title || 'Choose an exam';
-  document.querySelector('#result-subject').value = state.editingExam?.subject || '';
-  loadResultEditor(document.querySelector('#result-subject').value.trim());
+  const initialSubject = state.editingExam?.subject || '';
+  if (state.adminResults[initialSubject]) selectResultSubject(initialSubject);
+  else newSubjectResult(initialSubject);
+  renderAdminResults();
   if (document.querySelector('#results-view').classList.contains('is-visible')) await loadCompletedResults();
 }
 
@@ -440,11 +466,13 @@ function newAdminExam() {
   state.editingFiles = [];
   state.pendingPaperFiles = [];
   state.adminResults = {};
+  state.editingResultSubject = null;
   populateAdminForm(defaultConfig);
   renderAdminFiles();
   renderAdminExamList();
   document.querySelector('#result-exam-label').textContent = 'Choose an exam';
   document.querySelector('#result-subject').value = '';
+  renderAdminResults();
 }
 
 function renderAdminFiles() {
@@ -486,8 +514,9 @@ function toggleWindowField() {
 async function saveExamSettings(event) {
   event.preventDefault();
   const button = event.submitter;
+  const wasEditing = Boolean(state.editingExam?.id);
   button.disabled = true;
-  button.textContent = 'Publishing…';
+  button.textContent = 'Saving…';
   try {
     const uploaded = state.pendingPaperFiles.length ? await api.uploadPapers(state.pendingPaperFiles) : [];
     const existing = state.editingFiles.map(file => ({ storagePath: file.storage_path, fileName: file.file_name, mimeType: file.mime_type }));
@@ -506,17 +535,53 @@ async function saveExamSettings(event) {
       availabilityMode: mode,
       startsAt,
       availableUntil: mode === 'window' ? new Date(new Date(startsAt).getTime() + windowHours * 3_600_000).toISOString() : null,
+      studentNote: document.querySelector('#admin-student-note').value.trim(),
+      announcement: document.querySelector('#admin-announcement').value.trim(),
       paperPath: files[0].storagePath,
     });
     await api.saveExamFiles(savedRow.id, files);
     await refreshAdminExams(savedRow.id);
     await hydratePortal();
-    showToast('Exam published and scheduled.');
+    showToast(wasEditing ? 'Exam updated.' : 'Exam created and scheduled.');
   } catch (error) {
     showToast(`Publish failed: ${error.message}`);
   } finally {
     button.disabled = false;
-    button.textContent = 'Publish exam';
+    button.textContent = state.editingExam?.id ? 'Update exam' : 'Create exam';
+  }
+}
+
+async function deleteSelectedExam() {
+  if (!state.editingExam) return;
+  const exam = state.editingExam;
+  if (!window.confirm(`Delete “${exam.title}”? Its files, attempts, and published results will also be removed.`)) return;
+  const button = document.querySelector('#delete-exam-button');
+  button.disabled = true;
+  try {
+    const storedFiles = await api.fetchExamFiles(exam.id);
+    await api.deleteExam(exam.id, storedFiles.map(file => file.storage_path));
+    state.adminExams = state.adminExams.filter(item => item.id !== exam.id);
+    const completed = completedExamIds();
+    completed.delete(exam.id);
+    localStorage.setItem(COMPLETED_EXAMS_KEY, JSON.stringify([...completed]));
+    if (localStorage.getItem(LAST_COMPLETED_KEY) === exam.id) localStorage.removeItem(LAST_COMPLETED_KEY);
+    if (activeAttempt()?.examId === exam.id) localStorage.removeItem(ACTIVE_ATTEMPT_KEY);
+    if (state.running && state.config?.id === exam.id) {
+      state.running = false;
+      clearInterval(state.timerId);
+      elements.paperPages.replaceChildren();
+      elements.sessionPanel.hidden = true;
+      elements.startPanel.hidden = false;
+    }
+    if (state.adminExams.length) await selectAdminExam(state.adminExams[0].id);
+    else newAdminExam();
+    renderAdminExamList();
+    await hydratePortal();
+    showToast(`${exam.title} deleted.`);
+  } catch (error) {
+    showToast(`Delete failed: ${error.message}`);
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -532,6 +597,43 @@ function loadResultEditor(subject) {
   document.querySelector('#admin-cq-total').value = data.cqTotal;
   document.querySelector('#admin-mcq-score').value = data.mcq;
   document.querySelector('#admin-mcq-total').value = data.mcqTotal;
+  const editing = Boolean(state.editingResultSubject);
+  document.querySelector('#save-result-button').textContent = editing ? 'Update result' : 'Publish result';
+  document.querySelector('#delete-result-button').hidden = !editing;
+}
+
+function renderAdminResults() {
+  elements.adminResultList.replaceChildren();
+  const subjects = Object.keys(state.adminResults);
+  if (!subjects.length) {
+    const empty = document.createElement('span');
+    empty.className = 'result-list-empty';
+    empty.textContent = 'No subject results published yet.';
+    elements.adminResultList.append(empty);
+    return;
+  }
+  subjects.forEach(subject => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `result-edit-chip${state.editingResultSubject === subject ? ' is-active' : ''}`;
+    button.textContent = subject;
+    button.addEventListener('click', () => selectResultSubject(subject));
+    elements.adminResultList.append(button);
+  });
+}
+
+function selectResultSubject(subject) {
+  state.editingResultSubject = subject;
+  document.querySelector('#result-subject').value = subject;
+  loadResultEditor(subject);
+  renderAdminResults();
+}
+
+function newSubjectResult(subject = '') {
+  state.editingResultSubject = null;
+  document.querySelector('#result-subject').value = subject;
+  loadResultEditor('');
+  renderAdminResults();
 }
 
 async function saveSubjectResult(event) {
@@ -547,12 +649,39 @@ async function saveSubjectResult(event) {
   const button = event.submitter;
   button.disabled = true;
   try {
+    const previousSubject = state.editingResultSubject;
     await api.saveResult(state.editingExam.id, subject, result);
+    if (previousSubject && previousSubject !== subject) {
+      await api.deleteResult(state.editingExam.id, previousSubject);
+      delete state.adminResults[previousSubject];
+    }
     state.adminResults[subject] = result;
+    state.editingResultSubject = subject;
+    renderAdminResults();
+    loadResultEditor(subject);
     showToast(`${subject} result published for ${state.editingExam.title}.`);
     await loadCompletedResults();
   } catch (error) {
     showToast(`Publish failed: ${error.message}`);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+async function deleteSelectedResult() {
+  if (!state.editingExam || !state.editingResultSubject) return;
+  const subject = state.editingResultSubject;
+  if (!window.confirm(`Delete the ${subject} result from ${state.editingExam.title}?`)) return;
+  const button = document.querySelector('#delete-result-button');
+  button.disabled = true;
+  try {
+    await api.deleteResult(state.editingExam.id, subject);
+    delete state.adminResults[subject];
+    newSubjectResult(state.editingExam.subject);
+    await loadCompletedResults();
+    showToast(`${subject} result deleted.`);
+  } catch (error) {
+    showToast(`Delete failed: ${error.message}`);
   } finally {
     button.disabled = false;
   }
@@ -609,9 +738,11 @@ document.querySelector('#view-results').addEventListener('click', () => showView
 document.querySelector('#new-session').addEventListener('click', resetExam);
 document.querySelector('#exam-settings-form').addEventListener('submit', saveExamSettings);
 document.querySelector('#result-settings-form').addEventListener('submit', saveSubjectResult);
-document.querySelector('#result-subject').addEventListener('change', event => loadResultEditor(event.target.value.trim()));
 document.querySelector('#admin-new-exam').addEventListener('click', newAdminExam);
 document.querySelector('#admin-availability-mode').addEventListener('change', toggleWindowField);
+document.querySelector('#delete-exam-button').addEventListener('click', deleteSelectedExam);
+document.querySelector('#new-result-button').addEventListener('click', () => newSubjectResult());
+document.querySelector('#delete-result-button').addEventListener('click', deleteSelectedResult);
 
 document.querySelector('#admin-login-form').addEventListener('submit', async event => {
   event.preventDefault();

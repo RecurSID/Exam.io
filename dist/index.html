@@ -3,16 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Examio — a focused timed question-paper and results portal.">
+  <meta name="description" content="Examio — a cheerful, focused exam and results portal for bright young minds.">
   <meta name="theme-color" content="#273338">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://cvvtqbbkpcbifgtevjrc.supabase.co; connect-src 'self' https://cvvtqbbkpcbifgtevjrc.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'">
-  <title>Examio — Timed exam portal</title>
+  <title>Examio — Ready, set, shine!</title>
   <link rel="stylesheet" href="styles.css">
   <script defer src="config.js"></script>
   <script defer src="supabase.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
+  <div class="page-doodles" aria-hidden="true"><span>✦</span><span>★</span><span>●</span><span>✿</span></div>
   <div class="app-shell">
     <header class="topbar">
       <a class="brand" href="#" aria-label="Examio home">
@@ -24,7 +25,7 @@
         <button class="nav-button" type="button" data-view="results">Results</button>
         <button class="nav-button" type="button" data-view="admin">Admin</button>
       </nav>
-      <div class="session-chip"><span class="status-dot"></span>No login required</div>
+      <div class="session-chip"><span class="status-dot"></span>Ready to shine!</div>
     </header>
 
     <main>
@@ -32,12 +33,14 @@
         <div class="exam-hero">
           <div>
             <p class="eyebrow">Focus mode</p>
-            <h1 id="exam-title">Your paper. Your time.<br><em>Nothing else.</em></h1>
+            <h1 id="exam-title">Ready, set,<br><em>show what you know!</em></h1>
+            <div class="hero-stickers" aria-hidden="true"><span>★ Great job!</span><span>✎ Stay curious</span></div>
           </div>
           <div class="hero-orbit" aria-hidden="true">
             <div class="orbit-ring"></div>
             <div class="orbit-clock">15<span>min</span></div>
             <div class="orbit-note">Auto-sealed</div>
+            <div class="orbit-face"><i></i><i></i><b></b></div>
           </div>
         </div>
 
@@ -71,8 +74,19 @@
               <span>I understand the paper closes when time expires.</span>
             </label>
             <button class="primary-button" type="submit" disabled>Start exam</button>
-            <p class="microcopy">No candidate account required.</p>
+            <p class="microcopy">One focused try. You’ve got this!</p>
           </form>
+        </section>
+
+        <section id="exam-message-board" class="exam-message-board" hidden aria-label="Exam notes and announcements">
+          <article id="announcement-card" class="message-card announcement-card" hidden>
+            <span class="message-icon" aria-hidden="true">★</span>
+            <div><p class="eyebrow">Announcement</p><p id="exam-announcement"></p></div>
+          </article>
+          <article id="student-note-card" class="message-card student-note-card" hidden>
+            <span class="message-icon" aria-hidden="true">✎</span>
+            <div><p class="eyebrow">A note for you</p><p id="exam-student-note"></p></div>
+          </article>
         </section>
 
         <section id="upcoming-section" class="upcoming-section" hidden aria-labelledby="upcoming-title">
@@ -220,13 +234,22 @@
                 <input id="admin-window-hours" type="number" min="1" max="168" value="24" required>
                 <span>Candidate may begin anytime during this window and receives the full exam duration.</span>
               </label>
+              <label class="field field-wide">Student note
+                <textarea id="admin-student-note" maxlength="500" placeholder="Helpful instructions or an encouraging note for students"></textarea>
+              </label>
+              <label class="field field-wide">Announcement
+                <textarea id="admin-announcement" maxlength="500" placeholder="Important update shown prominently before the exam"></textarea>
+              </label>
               <label class="field field-wide file-field">Question-paper files
                 <input id="admin-paper" type="file" multiple accept="image/png,image/jpeg,image/webp,image/svg+xml,application/pdf">
                 <span>Multiple PNG, JPG, WebP, SVG or PDF files · 25 MB maximum per file</span>
               </label>
             </div>
             <div id="admin-file-list" class="admin-file-list"><p>No files selected.</p></div>
-            <button class="primary-button" type="submit">Publish exam</button>
+            <div class="admin-form-actions">
+              <button id="save-exam-button" class="primary-button" type="submit">Create exam</button>
+              <button id="delete-exam-button" class="danger-button" type="button" hidden>Delete exam</button>
+            </div>
           </form>
 
           <form id="result-settings-form" class="admin-card">
@@ -241,14 +264,18 @@
               <label class="field">MCQ score<input id="admin-mcq-score" type="number" min="0" required value="0"></label>
               <label class="field">MCQ full marks<input id="admin-mcq-total" type="number" min="1" required value="50"></label>
             </div>
-            <button class="primary-button" type="submit">Publish subject result</button>
-            <p class="storage-note"><span>Connected storage</span> Published results are shared through Supabase.</p>
+            <div id="admin-result-list" class="admin-result-list" aria-label="Published subject results"></div>
+            <div class="result-form-actions">
+              <button id="save-result-button" class="primary-button" type="submit">Publish result</button>
+              <button id="new-result-button" class="secondary-button" type="button">New subject</button>
+              <button id="delete-result-button" class="danger-button" type="button" hidden>Delete result</button>
+            </div>
           </form>
         </div>
       </section>
     </main>
 
-    <footer><span>Examio</span><span>Powered by Supabase</span></footer>
+    <footer><span>Examio</span><span>Made for bright minds ✦</span></footer>
   </div>
 
   <div id="privacy-cover" class="privacy-cover" hidden>

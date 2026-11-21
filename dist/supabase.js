@@ -77,7 +77,7 @@
   }
 
   async function fetchPortalExams() {
-    const fields = 'id,title,subject,class_name,duration_minutes,full_marks,status,availability_mode,starts_at,available_until,updated_at';
+    const fields = 'id,title,subject,class_name,duration_minutes,full_marks,status,availability_mode,starts_at,available_until,student_note,announcement,updated_at';
     return request(`/rest/v1/exams?select=${fields}&status=eq.published&order=starts_at.asc`);
   }
 
@@ -104,6 +104,7 @@
       paper_path: exam.paperPath || null, status: 'published',
       availability_mode: exam.availabilityMode, starts_at: exam.startsAt,
       available_until: exam.availabilityMode === 'window' ? exam.availableUntil : null,
+      student_note: exam.studentNote || '', announcement: exam.announcement || '',
       updated_at: new Date().toISOString(),
     };
     const options = { method: exam.id ? 'PATCH' : 'POST', token: session.access_token, body: JSON.stringify(payload), headers: { Prefer: 'return=representation' } };
@@ -136,6 +137,22 @@
       headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
     });
     return rows[0];
+  }
+
+  async function deleteResult(examId, subject) {
+    const session = await requireSession();
+    return request(`/rest/v1/results?exam_id=eq.${encodeURIComponent(examId)}&subject=eq.${encodeURIComponent(subject)}`, {
+      method: 'DELETE', token: session.access_token,
+    });
+  }
+
+  async function deleteExam(examId, storagePaths = []) {
+    const session = await requireSession();
+    await request(`/rest/v1/exams?id=eq.${encodeURIComponent(examId)}`, { method: 'DELETE', token: session.access_token });
+    await Promise.allSettled(storagePaths.map(path => request(
+      `/storage/v1/object/question-papers/${path.split('/').map(encodeURIComponent).join('/')}`,
+      { method: 'DELETE', token: session.access_token },
+    )));
   }
 
   async function uploadPapers(files) {
@@ -173,6 +190,7 @@
   window.examioApi = Object.freeze({
     isConfigured, getSession, signIn, signOut, getAdminProfile,
     fetchPortalExams, fetchAdminExams, fetchExamFiles, fetchResults,
-    saveExam, saveExamFiles, saveResult, uploadPapers, createPaperPreview, startExam,
+    saveExam, saveExamFiles, saveResult, deleteResult, deleteExam,
+    uploadPapers, createPaperPreview, startExam,
   });
 })();

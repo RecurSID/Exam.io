@@ -4,7 +4,7 @@
 
 Examio is a buildless static application. `index.html` provides semantic structure, `styles.css` owns the responsive design system, `app.js` owns interface state, and `supabase.js` provides the browser API client.
 
-Supabase Postgres stores scheduled exams, ordered paper-file metadata, and exam-specific subject results. Supabase Auth and Row Level Security protect administrator writes. Images and PDFs live in a private Storage bucket. The `start-exam` Edge Function validates the schedule, creates the authoritative deadline, and returns short-lived signed URLs for every paper file.
+Supabase Postgres stores scheduled exams, student-facing notes and announcements, ordered paper-file metadata, and exam-specific subject results. Supabase Auth and Row Level Security protect administrator create, update, and delete operations. Images and PDFs live in a private Storage bucket. The `start-exam` Edge Function validates the schedule, creates the authoritative deadline, and returns short-lived signed URLs for every paper file.
 
 ## Runtime architecture
 
