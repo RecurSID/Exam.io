@@ -18,7 +18,7 @@ Candidate browser
        -> server-authoritative exam session
 ```
 
-The server is authoritative for exam start and end times. A fixed exam ends for everyone at `starts_at + duration`, so a late starter receives only the remaining time. A flexible exam may begin between `starts_at` and `available_until`; each valid start receives the full duration. Paper URLs expire shortly after that session deadline, while the browser removes all rendered files at the exact deadline.
+The server is authoritative for exam start and end times. A fixed exam ends for everyone at `starts_at + duration`, so a late starter receives only the remaining time. A flexible exam may begin between `starts_at` and `available_until`; each valid first start receives the full duration. The session is uniquely bound to a salted browser-token hash and public-IP hash. Refreshes and browser restarts resume the original deadline, while another device on the same network is rejected. Paper URLs expire shortly after that session deadline, while the browser removes all rendered files at the exact deadline.
 
 ## Recommended free-first stack
 

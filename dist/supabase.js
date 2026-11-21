@@ -17,7 +17,10 @@
     const payload = contentType.includes('application/json') ? await response.json() : await response.text();
     if (!response.ok) {
       const message = payload?.msg || payload?.message || payload?.error_description || payload?.error || `Request failed (${response.status})`;
-      throw new Error(payload?.detail ? `${message}: ${payload.detail}` : message);
+      const error = new Error(payload?.detail ? `${message}: ${payload.detail}` : message);
+      error.status = response.status;
+      error.payload = payload;
+      throw error;
     }
     return payload;
   }
@@ -161,8 +164,10 @@
     return signedPath.startsWith('/storage/v1') ? `${baseUrl}${signedPath}` : `${baseUrl}/storage/v1${signedPath}`;
   }
 
-  async function startExam(examId) {
-    return request('/functions/v1/start-exam', { method: 'POST', body: JSON.stringify({ exam_id: examId }) });
+  async function startExam(examId, deviceToken, action = 'start') {
+    return request('/functions/v1/start-exam', {
+      method: 'POST', body: JSON.stringify({ exam_id: examId, device_token: deviceToken, action }),
+    });
   }
 
   window.examioApi = Object.freeze({

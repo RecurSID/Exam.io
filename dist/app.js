@@ -1,5 +1,7 @@
 const COMPLETED_EXAMS_KEY = 'examio-completed-exams';
 const LAST_COMPLETED_KEY = 'examio-last-completed-exam';
+const DEVICE_TOKEN_KEY = 'examio-device-token';
+const ACTIVE_ATTEMPT_KEY = 'examio-active-attempt';
 const DHAKA_TIME_ZONE = 'Asia/Dhaka';
 const api = window.examioApi;
 
@@ -32,6 +34,20 @@ const elements = {
 function completedExamIds() {
   try { return new Set(JSON.parse(localStorage.getItem(COMPLETED_EXAMS_KEY)) || []); }
   catch { return new Set(); }
+}
+
+function deviceToken() {
+  let token = localStorage.getItem(DEVICE_TOKEN_KEY);
+  if (!token) {
+    token = `${crypto.randomUUID()}-${crypto.randomUUID()}`;
+    localStorage.setItem(DEVICE_TOKEN_KEY, token);
+  }
+  return token;
+}
+
+function activeAttempt() {
+  try { return JSON.parse(localStorage.getItem(ACTIVE_ATTEMPT_KEY)); }
+  catch { return null; }
 }
 
 function markCompleted(examId) {
@@ -172,16 +188,22 @@ async function startExam(event) {
   button.disabled = true;
   button.textContent = 'Opening paper…';
   try {
-    const session = await api.startExam(state.config.id);
-    state.deadline = new Date(session.expires_at).getTime();
-    state.totalSeconds = Math.max(1, Math.round((state.deadline - new Date(session.started_at).getTime()) / 1000));
-    state.remainingSeconds = Math.max(0, Math.ceil((state.deadline - Date.now()) / 1000));
-    renderPaperFiles(session.files || []);
+    const session = await api.startExam(state.config.id, deviceToken());
+    openExamSession(session);
   } catch (error) {
     button.disabled = false;
     button.textContent = 'Start exam';
     return showToast(`Unable to start: ${error.message}`);
   }
+  button.textContent = 'Start exam';
+}
+
+function openExamSession(session, { scroll = true } = {}) {
+  localStorage.setItem(ACTIVE_ATTEMPT_KEY, JSON.stringify({ examId: state.config.id }));
+  state.deadline = new Date(session.expires_at).getTime();
+  state.totalSeconds = Math.max(1, Math.round((state.deadline - new Date(session.started_at).getTime()) / 1000));
+  state.remainingSeconds = Math.max(0, Math.ceil((state.deadline - Date.now()) / 1000));
+  renderPaperFiles(session.files || []);
   state.running = true;
   elements.startPanel.hidden = true;
   elements.upcomingSection.hidden = true;
@@ -192,8 +214,30 @@ async function startExam(event) {
   clearInterval(state.timerId);
   state.timerId = window.setInterval(updateTimer, 250);
   updateTimer();
-  elements.sessionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  button.textContent = 'Start exam';
+  if (scroll) elements.sessionPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function resumeActiveAttempt() {
+  const attempt = activeAttempt();
+  if (!attempt?.examId) return;
+  const exam = state.exams.find(item => item.id === attempt.examId);
+  if (!exam) return;
+  state.config = exam;
+  try {
+    const session = await api.startExam(exam.id, deviceToken(), 'resume');
+    openExamSession(session, { scroll: false });
+    showToast('Your active attempt was securely resumed.');
+  } catch (error) {
+    if (error.status === 410 && error.payload?.attempt_status === 'expired') {
+      localStorage.removeItem(ACTIVE_ATTEMPT_KEY);
+      markCompleted(exam.id);
+      renderCandidatePortal();
+      await loadCompletedResults();
+      return;
+    }
+    if (error.status === 404) localStorage.removeItem(ACTIVE_ATTEMPT_KEY);
+    else showToast(`Attempt resume failed: ${error.message}`);
+  }
 }
 
 function renderPaperFiles(files) {
@@ -232,6 +276,7 @@ function endExam() {
   state.running = false;
   clearInterval(state.timerId);
   markCompleted(state.config.id);
+  localStorage.removeItem(ACTIVE_ATTEMPT_KEY);
   elements.paperPages.replaceChildren();
   elements.sessionPanel.hidden = true;
   elements.expiredPanel.hidden = false;
@@ -260,8 +305,12 @@ function setWatermark() {
 
 function showPrivacyCover() { if (state.running) elements.privacyCover.hidden = false; }
 
+function visibleResultsExamId() {
+  return state.adminSession && state.editingExam ? state.editingExam.id : localStorage.getItem(LAST_COMPLETED_KEY);
+}
+
 async function loadCompletedResults() {
-  const examId = localStorage.getItem(LAST_COMPLETED_KEY);
+  const examId = visibleResultsExamId();
   if (!examId) {
     state.results = {};
     return renderResultsState();
@@ -273,7 +322,7 @@ async function loadCompletedResults() {
 }
 
 function renderResultsState() {
-  const examId = localStorage.getItem(LAST_COMPLETED_KEY);
+  const examId = visibleResultsExamId();
   const hasResults = Object.keys(state.results).length > 0;
   elements.resultsEmpty.hidden = Boolean(examId && hasResults);
   elements.resultsContent.hidden = !examId || !hasResults;
@@ -282,7 +331,9 @@ function renderResultsState() {
     document.querySelector('#results-empty-copy').textContent = 'Complete an exam to see results.';
   } else if (!hasResults) {
     document.querySelector('#results-empty-title').textContent = 'Results not published';
-    document.querySelector('#results-empty-copy').textContent = 'Results will appear after the administrator publishes them.';
+    document.querySelector('#results-empty-copy').textContent = state.adminSession
+      ? 'Publish a subject result for the selected exam to preview it here.'
+      : 'Results will appear after the administrator publishes them.';
   } else {
     renderSubjectTabs();
     renderResult(state.selectedSubject);
@@ -381,6 +432,7 @@ async function selectAdminExam(examId) {
   document.querySelector('#result-exam-label').textContent = state.editingExam?.title || 'Choose an exam';
   document.querySelector('#result-subject').value = state.editingExam?.subject || '';
   loadResultEditor(document.querySelector('#result-subject').value.trim());
+  if (document.querySelector('#results-view').classList.contains('is-visible')) await loadCompletedResults();
 }
 
 function newAdminExam() {
@@ -529,13 +581,16 @@ async function hydratePortal() {
 
 async function hydrate() {
   await hydratePortal();
+  await resumeActiveAttempt();
   const session = await api.getSession();
   if (session) {
     try { await showAdminDashboard(session); }
     catch (error) { document.querySelector('#admin-login-status').textContent = error.message; }
   }
   clearInterval(state.scheduleTimerId);
-  state.scheduleTimerId = window.setInterval(renderCandidatePortal, 15_000);
+  state.scheduleTimerId = window.setInterval(() => {
+    if (!state.running) renderCandidatePortal();
+  }, 15_000);
 }
 
 let toastTimeout;
@@ -580,6 +635,7 @@ document.querySelector('#admin-sign-out').addEventListener('click', async () => 
   state.adminSession = null;
   document.querySelector('#admin-dashboard').hidden = true;
   document.querySelector('#admin-login-form').hidden = false;
+  if (document.querySelector('#results-view').classList.contains('is-visible')) await loadCompletedResults();
 });
 
 elements.paperInput.addEventListener('change', event => {

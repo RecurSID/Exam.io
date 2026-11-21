@@ -14,6 +14,12 @@ The prototype uses practical deterrents:
 
 These controls raise friction but are not a security boundary.
 
+## One-attempt enforcement
+
+Exam starts are recorded by the server with a salted hash of an anonymous browser device token and a salted hash of the originating public IP address. Raw IP addresses are not stored. Refreshing or reopening the same browser resumes the original server deadline; it never creates a new countdown. A different browser or device on the same public network is rejected for that exam.
+
+IP locking deliberately treats a shared Wi-Fi/NAT connection as one network. It can therefore block legitimate candidates who share one public IP, and a person who changes both device and network can bypass it. Reliable person-level enforcement requires candidate authentication or an administrator-issued attempt code; browser fingerprinting alone is not a dependable identity mechanism.
+
 ## Stronger production controls
 
 - Render a per-session watermark containing candidate ID and timestamp
